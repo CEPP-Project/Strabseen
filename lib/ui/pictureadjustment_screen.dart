@@ -1,9 +1,13 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart'; // For picking images
 import 'dart:io'; // For using File
+import 'package:image/image.dart' as img;
 import 'package:photo_view/photo_view.dart';
-import 'package:strabismus/ui/loading_screen.dart'; // Import this for PhotoViewController
+import 'package:strabismus/ui/loading_screen.dart';
+import 'package:strabismus/ui/testcrop_screen.dart'; // Import this for PhotoViewController
 
 class PictureAdjustmentScreen extends StatefulWidget {
   const PictureAdjustmentScreen({super.key});
@@ -80,10 +84,13 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
     setState(() {
       if (_currentEyeType == 'left') {
         _leftImage = null;
+        _leftPhotoViewController.reset();
       } else if (_currentEyeType == 'middle') {
         _middleImage = null;
+        _middlePhotoViewController.reset();
       } else if (_currentEyeType == 'right') {
         _rightImage = null;
+        _rightPhotoViewController.reset();
       }
     });
   }
@@ -112,28 +119,116 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
     });
   }
 
-  List<XFile?> _cropImages() {
-    final List<XFile?> croppedImages = [];
+  Future<List<XFile?>> _cropImages() async {
+    final List<Future<XFile?>> cropFutures = [];
+
     if (_leftImage != null) {
-      croppedImages
-          .add(_cropImage(_leftImage!, _leftImagePosition, _leftImageScale));
+      double scale = _leftPhotoViewController.scale!;
+      Offset position = _leftPhotoViewController.position;
+      _saveAdjustedPosition(scale, position);
+      cropFutures
+          .add(_cropImage(_leftImage!, _leftImagePosition, _leftImageScale,"left"));
     }
     if (_middleImage != null) {
-      croppedImages.add(
-          _cropImage(_middleImage!, _middleImagePosition, _middleImageScale));
+      double scale = _middlePhotoViewController.scale!;
+      Offset position = _middlePhotoViewController.position;
+      _saveAdjustedPosition(scale, position);
+      cropFutures.add(
+          _cropImage(_middleImage!, _middleImagePosition, _middleImageScale,"middle"));
     }
     if (_rightImage != null) {
-      croppedImages
-          .add(_cropImage(_rightImage!, _rightImagePosition, _rightImageScale));
+      double scale = _rightPhotoViewController.scale!;
+      Offset position = _rightPhotoViewController.position;
+      _saveAdjustedPosition(scale, position);
+      cropFutures
+          .add(_cropImage(_rightImage!, _rightImagePosition, _rightImageScale,"right"));
     }
+
+    // Wait for all the cropping operations to complete
+    final List<XFile?> croppedImages = await Future.wait(cropFutures);
+
     return croppedImages;
   }
 
-  XFile _cropImage(XFile imageFile, Offset position, double scale) {
-    // Implement your cropping logic here, adjust based on position and scale
-    // For demonstration purposes, return the original image
-    return imageFile;
+  Future<XFile> _cropImage(XFile imageFile, Offset offset, double scale, String eye) async {
+    // Load the original image
+    final File file = File(imageFile.path);
+    final img.Image originalImage = img.decodeImage(await file.readAsBytes())!;
+
+    // Define the viewport dimensions
+    final int viewportWidth = (width - menuSize).toInt();
+    final int viewportHeight = height.toInt();
+
+    // Scale the original image
+    final int scaledWidth = (originalImage.width * scale).toInt();
+    final int scaledHeight = (originalImage.height * scale).toInt();
+    final img.Image scaledImage = img.copyResize(
+      originalImage,
+      width: scaledWidth,
+      height: scaledHeight,
+    );
+
+    // Calculate placement coordinates
+    final double centerX = viewportWidth / 2 + offset.dx;
+    final double centerY = viewportHeight / 2 + offset.dy;
+    final double topLeftX = centerX - (scaledWidth / 2);
+    final double topLeftY = centerY - (scaledHeight / 2);
+    final double bottomRightX = centerX + (scaledWidth / 2);
+    final double bottomRightY = centerY + (scaledHeight / 2);
+
+    // Print debug variables
+    print("Viewport dimensions: $viewportWidth x $viewportHeight");
+    print("Scaled image dimensions: $scaledWidth x $scaledHeight");
+    print("Center of viewport: ($centerX, $centerY)");
+    print("Top-left corner of scaled image: ($topLeftX, $topLeftY)");
+    print("Bottom-right corner of scaled image: ($bottomRightX, $bottomRightY)");
+
+    // Create a blank image as the viewport
+    final img.Image viewportImage = img.Image(viewportWidth, viewportHeight, channels: img.Channels.rgb);
+
+    // Determine the crop area if the scaled image is larger than the viewport
+    final int cropX = max(0, -topLeftX).toInt();
+    final int cropY = max(0, -topLeftY).toInt();
+    final int cropWidth = min(scaledWidth-cropX,scaledWidth-cropX+bottomRightX-viewportWidth).toInt();
+    final int cropHeight = min(scaledHeight-cropY,scaledHeight-cropY+bottomRightY-viewportHeight).toInt();
+
+    // Print debug crop area variables
+    print("Crop area: ($cropX, $cropY, $cropWidth x $cropHeight)");
+
+    // Create a cropped image based on the viewport dimensions
+    img.Image croppedScaledImage = img.copyCrop(
+      scaledImage,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+    );
+
+    // Calculate the position on the viewport to paste the cropped image
+    final int dstX = topLeftX.clamp(0.0, viewportWidth.toDouble()).toInt();
+    final int dstY = topLeftY.clamp(0.0, viewportHeight.toDouble()).toInt();
+
+    // Print debug paste position
+    print("Paste position on viewport: ($dstX, $dstY)");
+
+    // Paste the cropped scaled image onto the viewport image
+    img.copyInto(
+      viewportImage,
+      croppedScaledImage,
+      dstX: dstX,
+      dstY: dstY,
+    );
+
+    // Save the resulting image to a temporary file
+    final String timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('T', '_');
+    final Directory tempDir = Directory.systemTemp;
+    final String tempPath = '${tempDir.path}/cropped_image_${eye}_$timestamp.png';
+    final File tempFile = File(tempPath)..writeAsBytesSync(img.encodePng(viewportImage));
+
+    // Return the path of the temporary file as XFile
+    return XFile(tempPath);
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -145,47 +240,159 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
 
     // Get the current image and controller based on the selected eye type
     XFile? currentImage = _leftImage;
-    PhotoViewController currentController = _leftPhotoViewController;
+    // PhotoViewController currentController = _leftPhotoViewController;
     if (_currentEyeType == 'left') {
       currentImage = _leftImage;
-      currentController = _leftPhotoViewController;
+      // currentController = _leftPhotoViewController;
     } else if (_currentEyeType == 'middle') {
       currentImage = _middleImage;
-      currentController = _middlePhotoViewController;
+      // currentController = _middlePhotoViewController;
     } else if (_currentEyeType == 'right') {
       currentImage = _rightImage;
-      currentController = _rightPhotoViewController;
+      // currentController = _rightPhotoViewController;
     }
 
     return Scaffold(
       body: Stack(
         children: [
           // Display Imported Picture with PhotoView
-          if (currentImage != null)
+          if (_leftImage != null)
             Positioned(
-              left: 0,
+              left: (_currentEyeType == 'left' && _leftImage != null)
+                  ? 0
+                  : -10000,
               top: 0,
               width: width - menuSize,
               height: height,
               child: PhotoView(
-                controller: currentController,
-                imageProvider: FileImage(File(currentImage.path)),
+                controller: _leftPhotoViewController,
+                imageProvider: FileImage(File(_leftImage!.path)),
                 minScale: PhotoViewComputedScale.contained,
-                maxScale: PhotoViewComputedScale.covered * 2,
+                maxScale: PhotoViewComputedScale.covered * 3,
                 backgroundDecoration: const BoxDecoration(
                   color: Colors.transparent,
                 ),
                 enableRotation: false, // Disable rotation
                 scaleStateChangedCallback: (scaleState) {
                   // Save the scale when it changes
-                  double scale = currentController.scale!;
-                  Offset position = currentController.position;
+                  double scale = _leftPhotoViewController.scale!;
+                  Offset position = _leftPhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+                onScaleEnd: (context, details, controller) {
+                  // Save the position when tapping
+                  double scale = _leftPhotoViewController.scale!;
+                  Offset position = _leftPhotoViewController.position;
+                  // print("left $scale $position");
                   _saveAdjustedPosition(scale, position);
                 },
                 onTapUp: (context, details, controller) {
                   // Save the position when tapping
-                  double scale = currentController.scale!;
-                  Offset position = currentController.position;
+                  double scale = _leftPhotoViewController.scale!;
+                  Offset position = _leftPhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+                onTapDown: (context, details, controller) {
+                  // Save the position when tapping
+                  double scale = _leftPhotoViewController.scale!;
+                  Offset position = _leftPhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+              ),
+            ),
+          if (_middleImage != null)
+            Positioned(
+              left: (_currentEyeType == 'middle' && _middleImage != null)
+                  ? 0
+                  : -10000,
+              top: 0,
+              width: width - menuSize,
+              height: height,
+              child: PhotoView(
+                controller: _middlePhotoViewController,
+                imageProvider: FileImage(File(_middleImage!.path)),
+                minScale: PhotoViewComputedScale.contained,
+                maxScale: PhotoViewComputedScale.covered * 3,
+                backgroundDecoration: const BoxDecoration(
+                  color: Colors.transparent,
+                ),
+                enableRotation: false, // Disable rotation
+                scaleStateChangedCallback: (scaleState) {
+                  // Save the scale when it changes
+                  double scale = _middlePhotoViewController.scale!;
+                  Offset position = _middlePhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+                onScaleEnd: (context, details, controller) {
+                  // Save the position when tapping
+                  double scale = _middlePhotoViewController.scale!;
+                  Offset position = _middlePhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+                onTapUp: (context, details, controller) {
+                  // Save the position when tapping
+                  double scale = _middlePhotoViewController.scale!;
+                  Offset position = _middlePhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+                onTapDown: (context, details, controller) {
+                  // Save the position when tapping
+                  double scale = _middlePhotoViewController.scale!;
+                  Offset position = _middlePhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+              ),
+            ),
+          if (_rightImage != null)
+            Positioned(
+              left: (_currentEyeType == 'right' && _rightImage != null)
+                  ? 0
+                  : -10000,
+              top: 0,
+              width: width - menuSize,
+              height: height,
+              child: PhotoView(
+                controller: _rightPhotoViewController,
+                imageProvider: FileImage(File(_rightImage!.path)),
+                minScale: PhotoViewComputedScale.contained,
+                maxScale: PhotoViewComputedScale.covered * 3,
+                backgroundDecoration: const BoxDecoration(
+                  color: Colors.transparent,
+                ),
+                enableRotation: false, // Disable rotation
+                scaleStateChangedCallback: (scaleState) {
+                  // Save the scale when it changes
+                  double scale = _rightPhotoViewController.scale!;
+                  Offset position = _rightPhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+                onScaleEnd: (context, details, controller) {
+                  // Save the position when tapping
+                  double scale = _rightPhotoViewController.scale!;
+                  Offset position = _rightPhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+                onTapUp: (context, details, controller) {
+                  // Save the position when tapping
+                  double scale = _rightPhotoViewController.scale!;
+                  Offset position = _rightPhotoViewController.position;
+                  // print("left $scale $position");
+                  _saveAdjustedPosition(scale, position);
+                },
+                onTapDown: (context, details, controller) {
+                  // Save the position when tapping
+                  double scale = _rightPhotoViewController.scale!;
+                  Offset position = _rightPhotoViewController.position;
+                  // print("left $scale $position");
                   _saveAdjustedPosition(scale, position);
                 },
               ),
@@ -287,22 +494,37 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
                   ),
                   SizedBox(height: menuGap),
                   SizedBox(
-                    width: menuSize - 20,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final croppedImages = _cropImages();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => LoadingScreen(
-                              photos: croppedImages,
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text('Submit'),
-                    ),
-                  ),
+                      width: menuSize - 20,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          // Store the current context
+                          final BuildContext context = this.context;
+
+                          // Await the result of _cropImages() to get the cropped images
+                          final List<XFile?> croppedImages =
+                              await _cropImages();
+
+                          // Check if the widget is still mounted before navigating
+                          if (context.mounted) {
+                            if (_leftImage != null && _middleImage != null && _rightImage != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => TestCropScreen(
+                                    photos: croppedImages,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              // Use a new context for showing the Snackbar, which is safe
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please import all images.')),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text('Submit'),
+                      )),
                 ],
               ),
             ),

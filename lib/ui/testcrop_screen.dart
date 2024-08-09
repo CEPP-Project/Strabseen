@@ -26,7 +26,7 @@ class TestCropScreen extends StatelessWidget {
           return photo != null
               ? Image.file(
             File(photo.path),
-            fit: BoxFit.cover,
+            fit: BoxFit.contain,
           )
               : const Center(child: Text('No Image'));
         },

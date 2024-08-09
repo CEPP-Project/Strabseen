@@ -177,11 +177,11 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
     final double bottomRightY = centerY + (scaledHeight / 2);
 
     // Print debug variables
-    print("Viewport dimensions: $viewportWidth x $viewportHeight");
-    print("Scaled image dimensions: $scaledWidth x $scaledHeight");
-    print("Center of viewport: ($centerX, $centerY)");
-    print("Top-left corner of scaled image: ($topLeftX, $topLeftY)");
-    print("Bottom-right corner of scaled image: ($bottomRightX, $bottomRightY)");
+    // print("Viewport dimensions: $viewportWidth x $viewportHeight");
+    // print("Scaled image dimensions: $scaledWidth x $scaledHeight");
+    // print("Center of viewport: ($centerX, $centerY)");
+    // print("Top-left corner of scaled image: ($topLeftX, $topLeftY)");
+    // print("Bottom-right corner of scaled image: ($bottomRightX, $bottomRightY)");
 
     // Create a blank image as the viewport
     final img.Image viewportImage = img.Image(viewportWidth, viewportHeight, channels: img.Channels.rgb);
@@ -189,11 +189,11 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
     // Determine the crop area if the scaled image is larger than the viewport
     final int cropX = max(0, -topLeftX).toInt();
     final int cropY = max(0, -topLeftY).toInt();
-    final int cropWidth = min(scaledWidth-cropX,scaledWidth-cropX+bottomRightX-viewportWidth).toInt();
-    final int cropHeight = min(scaledHeight-cropY,scaledHeight-cropY+bottomRightY-viewportHeight).toInt();
+    final int cropWidth = min(scaledWidth-cropX,scaledWidth-cropX-(bottomRightX-viewportWidth)).toInt();
+    final int cropHeight = min(scaledHeight-cropY,scaledHeight-cropY-(bottomRightY-viewportHeight)).toInt();
 
     // Print debug crop area variables
-    print("Crop area: ($cropX, $cropY, $cropWidth x $cropHeight)");
+    // print("Crop area: ($cropX, $cropY, $cropWidth x $cropHeight)");
 
     // Create a cropped image based on the viewport dimensions
     img.Image croppedScaledImage = img.copyCrop(
@@ -209,7 +209,7 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
     final int dstY = topLeftY.clamp(0.0, viewportHeight.toDouble()).toInt();
 
     // Print debug paste position
-    print("Paste position on viewport: ($dstX, $dstY)");
+    // print("Paste position on viewport: ($dstX, $dstY)");
 
     // Paste the cropped scaled image onto the viewport image
     img.copyInto(
@@ -510,7 +510,7 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => TestCropScreen(
+                                  builder: (context) => LoadingScreen(
                                     photos: croppedImages,
                                   ),
                                 ),

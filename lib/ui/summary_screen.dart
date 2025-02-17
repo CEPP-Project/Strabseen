@@ -9,6 +9,22 @@ class SummaryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (result.containsKey('error')) {
+      return Scaffold(
+        body: Center(
+          child: Text(
+            'Error: ${result['error']}',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.red,
+              fontSize: 18.0,
+            ),
+          ),
+        ),
+        bottomNavigationBar: _buildBottomNavigationBar(context),
+      );
+    }
+
     Map<String, dynamic> variable = result;
     bool trueValue = variable['result'][0];
     double pointEightOneValue = variable['result'][1][1];
@@ -16,42 +32,47 @@ class SummaryScreen extends StatelessWidget {
         '${(pointEightOneValue * 100).toStringAsFixed(0)}%';
 
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text('Result Screen'),
-      // ),
       body: Center(
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(
-          'Strabismus Rate $percentageValue',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-            fontSize: 18.0,
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Strabismus Rate $percentageValue',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+                fontSize: 18.0,
+              ),
+            ),
+            Text(
+              'You are ${trueValue == true ? "" : "not"} likely to be Strabismus',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+                fontSize: 18.0,
+              ),
+            ),
+          ],
         ),
-        Text(
-          'You are ${trueValue == true ? "" : "not"} likely to be Strabismus',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-            fontSize: 18.0,
-          ),
-        ),
-      ])),
-      bottomNavigationBar: BottomAppBar(
-        color: Colors.grey,
-        child: FutureBuilder(
-          future: _getToken(),
-          builder: (BuildContext context, AsyncSnapshot<String> snapshot) {
-            if (snapshot.hasData) {
-              return _returnButton(context, snapshot.data);
-            } else {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
-            }
-          },
-        ),
+      ),
+      bottomNavigationBar: _buildBottomNavigationBar(context),
+    );
+  }
+
+  Widget _buildBottomNavigationBar(BuildContext context) {
+    return BottomAppBar(
+      color: Colors.grey,
+      child: FutureBuilder(
+        future: _getToken(),
+        builder: (BuildContext context, AsyncSnapshot<String> snapshot) {
+          if (snapshot.hasData) {
+            return _returnButton(context, snapshot.data);
+          } else {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+        },
       ),
     );
   }

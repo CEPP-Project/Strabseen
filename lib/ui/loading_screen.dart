@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:strabismus/ui/mainmenu_screen.dart';
+// import 'package:strabismus/ui/mainmenu_screen.dart';
 import 'summary_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
@@ -41,7 +41,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
         token = result;
       });
       var apiUrl =
-          Uri.parse('https://mapp-api.redaxn.com/uploads/detect'); // real api
+          Uri.parse('https://iot.telemed.kmitl.ac.th/uploads/detect'); // real api
       // var apiUrl = Uri.parse('http://10.0.2.2:8000/upload-images'); // testing with emulate
       // var apiUrl = Uri.parse('http://192.168.x.x:8000/upload-images'); // testing with device on local network
 
@@ -69,13 +69,13 @@ class _LoadingScreenState extends State<LoadingScreen> {
         request.headers['Authorization'] = 'Bearer $token';
       }
       var response = await request.send().timeout(const Duration(seconds: 90));
-      print('Response Status Code: ${response.statusCode}');
-      //print('Response Body: ${await response.stream.bytesToString()}');
+      // print('Response Status Code: ${response.statusCode}');
+      // print('Response Body: ${await response.stream.bytesToString()}');
 
       if (response.statusCode == 200) {
         // API call was successful, process the response as needed
         var responseBody = await response.stream.bytesToString();
-
+        // print('Response Body: ${responseBody}');
         var result = json.decode(responseBody);
         if (context.mounted) {
           Navigator.of(context).push(MaterialPageRoute(
@@ -90,7 +90,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
                 title: const Text("Fail to Upload Image",
                     style: TextStyle(fontSize: 20)),
                 content: const Text(
-                    "Unknown error has occurred. Return to main menu"),
+                    "Unknown error has occurred."),
                 actions: [
                   TextButton(
                     onPressed: () {
@@ -103,12 +103,16 @@ class _LoadingScreenState extends State<LoadingScreen> {
             },
           );
           Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const MainMenuScreen()));
+              MaterialPageRoute(builder: (context) => SummaryScreen(result: {"error": "response status code is ${response.statusCode}"})));
         }
       }
     } catch (e) {
       // Handle other errors
-      print('Error uploading images: $e');
+      // print('Error uploading images: $e');
+      if(context.mounted) {
+        Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => SummaryScreen(result: {"error": 'Error uploading images: $e'})));
+      }
     }
 
     // You can pass any result to the next screen, such as processed data

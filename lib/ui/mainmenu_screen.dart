@@ -62,7 +62,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       borderRadius: BorderRadius.circular(10.0),
                     )),
                 child: const Text(
-                  'Strabismus Detect',
+                  'Strabseen',
                   style: TextStyle(
                     fontSize: 24.0,
                     color: Colors.white,

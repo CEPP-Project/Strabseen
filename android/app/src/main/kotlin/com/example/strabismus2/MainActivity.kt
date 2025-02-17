@@ -1,4 +1,4 @@
-package com.example.strabismus2
+package com.kmitl.strabismus2
 
 import io.flutter.embedding.android.FlutterActivity
 

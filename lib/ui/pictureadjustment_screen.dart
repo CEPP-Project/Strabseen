@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart'; // For picking images
 import 'package:image/image.dart' as img;
 import 'package:photo_view/photo_view.dart';
 import 'package:strabismus/ui/loading_screen.dart';
+import 'package:flutter_exif_rotation/flutter_exif_rotation.dart';
 import 'dart:math';
 import 'dart:io'; // For using File
 import 'package:strabismus/ui/testcrop_screen.dart'; // Import this for PhotoViewController
@@ -46,9 +47,6 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
   double _rightImageScale = 1.0;
 
   // To store eye frame position
-  // Offset _leftEyeFramePosition = Offset.zero;
-  // Offset _rightEyeFramePosition = Offset.zero;
-
   final Map<String, Offset> _leftEyeFramePositionMap = {
     "left": Offset.zero,
     "middle": Offset.zero,
@@ -87,14 +85,6 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
 
     // initial the value
     if (!_isInitialized) {
-      // _leftEyeFramePosition = Offset(
-      //   5 * (width - menuSize) / 16 - eyewidth / 2,
-      //   height / 2 - eyeheight / 2,
-      // );
-      // _rightEyeFramePosition = Offset(
-      //   11 * (width - menuSize) / 16 - eyewidth / 2,
-      //   height / 2 - eyeheight / 2,
-      // );
       Offset defaultLeftEyeOffset = Offset(
         5 * (width - menuSize) / 16 - eyewidth / 2,
         height / 2 - eyeheight / 2,
@@ -106,7 +96,8 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
       );
 
       _leftEyeFramePositionMap.updateAll((key, value) => defaultLeftEyeOffset);
-      _rightEyeFramePositionMap.updateAll((key, value) => defaultRightEyeOffset);
+      _rightEyeFramePositionMap
+          .updateAll((key, value) => defaultRightEyeOffset);
 
       _isInitialized = true;
     }
@@ -208,94 +199,100 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
     return croppedImages;
   }
 
-  Future<XFile> _cropImage(
+  Future<XFile?> _cropImage(
       XFile imageFile, Offset offset, double scale, String eye) async {
-    // Load the original image
-    final File file = File(imageFile.path);
-    final img.Image originalImage = img.decodeImage(await file.readAsBytes())!;
+    try {
+      // Load the original image (also rotate image if have exif orietation data)
+      final File file = await FlutterExifRotation.rotateAndSaveImage(path: imageFile.path);
+      final img.Image orientedImage = img.decodeImage(await file.readAsBytes())!;
 
-    // Define the viewport dimensions
-    final int viewportWidth = (width - menuSize).toInt();
-    final int viewportHeight = height.toInt();
+      // Define the viewport dimensions
+      final int viewportWidth = (width - menuSize).toInt();
+      final int viewportHeight = height.toInt();
 
-    // Scale the original image
-    final int scaledWidth = (originalImage.width * scale).toInt();
-    final int scaledHeight = (originalImage.height * scale).toInt();
-    final img.Image scaledImage = img.copyResize(
-      originalImage,
-      width: scaledWidth,
-      height: scaledHeight,
-    );
+      // Scale the original image
+      final int scaledWidth = (orientedImage.width * scale).toInt();
+      final int scaledHeight = (orientedImage.height * scale).toInt();
+      final img.Image scaledImage = img.copyResize(
+        orientedImage,
+        width: scaledWidth,
+        height: scaledHeight,
+      );
 
-    // Calculate placement coordinates
-    final double centerX = viewportWidth / 2 + offset.dx;
-    final double centerY = viewportHeight / 2 + offset.dy;
-    final double topLeftX = centerX - (scaledWidth / 2);
-    final double topLeftY = centerY - (scaledHeight / 2);
-    final double bottomRightX = centerX + (scaledWidth / 2);
-    final double bottomRightY = centerY + (scaledHeight / 2);
+      // Calculate placement coordinates
+      final double centerX = viewportWidth / 2 + offset.dx;
+      final double centerY = viewportHeight / 2 + offset.dy;
+      final double topLeftX = centerX - (scaledWidth / 2);
+      final double topLeftY = centerY - (scaledHeight / 2);
+      final double bottomRightX = centerX + (scaledWidth / 2);
+      final double bottomRightY = centerY + (scaledHeight / 2);
 
-    // Print debug variables
-    // print("Viewport dimensions: $viewportWidth x $viewportHeight");
-    // print("Scaled image dimensions: $scaledWidth x $scaledHeight");
-    // print("Center of viewport: ($centerX, $centerY)");
-    // print("Top-left corner of scaled image: ($topLeftX, $topLeftY)");
-    // print("Bottom-right corner of scaled image: ($bottomRightX, $bottomRightY)");
+      // Print debug variables
+      // print("Viewport dimensions: $viewportWidth x $viewportHeight");
+      // print("Scaled image dimensions: $scaledWidth x $scaledHeight");
+      // print("Center of viewport: ($centerX, $centerY)");
+      // print("Top-left corner of scaled image: ($topLeftX, $topLeftY)");
+      // print("Bottom-right corner of scaled image: ($bottomRightX, $bottomRightY)");
 
-    // Create a blank image as the viewport
-    final img.Image viewportImage =
-        img.Image(viewportWidth, viewportHeight, channels: img.Channels.rgb);
+      // Create a blank image as the viewport
+      final img.Image viewportImage =
+          img.Image(viewportWidth, viewportHeight, channels: img.Channels.rgb);
 
-    // Determine the crop area if the scaled image is larger than the viewport
-    final int cropX = max(0, -topLeftX).toInt();
-    final int cropY = max(0, -topLeftY).toInt();
-    final int cropWidth = min(scaledWidth - cropX,
-            scaledWidth - cropX - (bottomRightX - viewportWidth))
-        .toInt();
-    final int cropHeight = min(scaledHeight - cropY,
-            scaledHeight - cropY - (bottomRightY - viewportHeight))
-        .toInt();
+      // Determine the crop area if the scaled image is larger than the viewport
+      final int cropX = max(0, -topLeftX).toInt();
+      final int cropY = max(0, -topLeftY).toInt();
+      final int cropWidth = min(scaledWidth - cropX,
+              scaledWidth - cropX - (bottomRightX - viewportWidth))
+          .toInt();
+      final int cropHeight = min(scaledHeight - cropY,
+              scaledHeight - cropY - (bottomRightY - viewportHeight))
+          .toInt();
 
-    // Print debug crop area variables
-    // print("Crop area: ($cropX, $cropY, $cropWidth x $cropHeight)");
+      // Print debug crop area variables
+      // print("Crop area: ($cropX, $cropY, $cropWidth x $cropHeight)");
 
-    // Create a cropped image based on the viewport dimensions
-    img.Image croppedScaledImage = img.copyCrop(
-      scaledImage,
-      cropX,
-      cropY,
-      cropWidth,
-      cropHeight,
-    );
+      // Create a cropped image based on the viewport dimensions
+      img.Image croppedScaledImage = img.copyCrop(
+        scaledImage,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+      );
 
-    // Calculate the position on the viewport to paste the cropped image
-    final int dstX = topLeftX.clamp(0.0, viewportWidth.toDouble()).toInt();
-    final int dstY = topLeftY.clamp(0.0, viewportHeight.toDouble()).toInt();
+      // Calculate the position on the viewport to paste the cropped image
+      final int dstX = topLeftX.clamp(0.0, viewportWidth.toDouble()).toInt();
+      final int dstY = topLeftY.clamp(0.0, viewportHeight.toDouble()).toInt();
 
-    // Print debug paste position
-    // print("Paste position on viewport: ($dstX, $dstY)");
+      // Print debug paste position
+      // print("Paste position on viewport: ($dstX, $dstY)");
 
-    // Paste the cropped scaled image onto the viewport image
-    img.copyInto(
-      viewportImage,
-      croppedScaledImage,
-      dstX: dstX,
-      dstY: dstY,
-    );
+      // Paste the cropped scaled image onto the viewport image
+      img.copyInto(
+        viewportImage,
+        croppedScaledImage,
+        dstX: dstX,
+        dstY: dstY,
+      );
 
-    // Save the resulting image to a temporary file
-    final String timestamp = DateTime.now()
-        .toIso8601String()
-        .replaceAll(':', '-')
-        .replaceAll('T', '_');
-    final Directory tempDir = Directory.systemTemp;
-    final String tempPath =
-        '${tempDir.path}/cropped_image_${eye}_$timestamp.jpg';
-    // final File tempFile = File(tempPath)..writeAsBytesSync(img.encodePng(viewportImage));
-    final File tempFile = File(tempPath)
-      ..writeAsBytesSync(img.encodeJpg(viewportImage));
-    // Return the path of the temporary file as XFile
-    return XFile(tempPath);
+      // Save the resulting image to a temporary file
+      final String timestamp = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .replaceAll('T', '_');
+      final Directory tempDir = Directory.systemTemp;
+      final String tempPath =
+          '${tempDir.path}/cropped_image_${eye}_$timestamp.jpg';
+      // final File tempFile = File(tempPath)..writeAsBytesSync(img.encodePng(viewportImage));
+      final File tempFile = File(tempPath)
+        ..writeAsBytesSync(img.encodeJpg(viewportImage));
+      // Return the path of the temporary file as XFile
+      return XFile(tempPath);
+      
+    } catch (e) {
+      print('Error cropping image: $e');
+      return null;
+    }
   }
 
   @override
@@ -318,54 +315,19 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
       body: Stack(
         children: [
           // Display Imported Picture with PhotoView
-          if (_leftImage != null)
-            Positioned(
-              left: (_currentEyeType == 'left' && _leftImage != null)
-                  ? 0
-                  : -10000,
-              top: 0,
-              width: width - menuSize,
-              height: height,
-              child: _buildPhotoView(
-                _leftImage,
-                _leftPhotoViewController,
-                (scale, position) {
-                  _saveAdjustedPosition(scale, position);
-                },
-              ),
-            ),
-          if (_middleImage != null)
-            Positioned(
-              left: (_currentEyeType == 'middle' && _middleImage != null)
-                  ? 0
-                  : -10000,
-              top: 0,
-              width: width - menuSize,
-              height: height,
-              child: _buildPhotoView(
-                _middleImage,
-                _middlePhotoViewController,
-                (scale, position) {
-                  _saveAdjustedPosition(scale, position);
-                },
-              ),
-            ),
-          if (_rightImage != null)
-            Positioned(
-              left: (_currentEyeType == 'right' && _rightImage != null)
-                  ? 0
-                  : -10000,
-              top: 0,
-              width: width - menuSize,
-              height: height,
-              child: _buildPhotoView(
-                _rightImage,
-                _rightPhotoViewController,
-                (scale, position) {
-                  _saveAdjustedPosition(scale, position);
-                },
-              ),
-            ),
+          _buildPhotoViewForEye(_leftImage, _leftPhotoViewController,
+              (scale, position) {
+            _saveAdjustedPosition(scale, position);
+          }, _isLeftSelected),
+          _buildPhotoViewForEye(_middleImage, _middlePhotoViewController,
+              (scale, position) {
+            _saveAdjustedPosition(scale, position);
+          }, _isMiddleSelected),
+          _buildPhotoViewForEye(_rightImage, _rightPhotoViewController,
+              (scale, position) {
+            _saveAdjustedPosition(scale, position);
+          }, _isRightSelected),
+
           // Overlay Eye Frames
           if (currentImage != null)
             Positioned.fill(
@@ -386,7 +348,8 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
                     position: _rightEyeFramePositionMap[_currentEyeType]!,
                     onDragEnd: (newPosition) {
                       setState(() {
-                        _rightEyeFramePositionMap[_currentEyeType] = newPosition;
+                        _rightEyeFramePositionMap[_currentEyeType] =
+                            newPosition;
                       });
                     },
                     borderColor: Colors.black,
@@ -527,7 +490,7 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
           // Centered Import Picture Button
           if (currentImage == null)
             Positioned(
-              left: (width - menuSize) / 2, // Center horizontally
+              left: ((width - menuSize) / 2), // Center horizontally
               top: height / 2 - 20, // Center vertically
               child: ElevatedButton(
                 onPressed: _importPicture,
@@ -549,8 +512,12 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
   }
 
   Widget _buildPhotoView(
-      XFile? image, PhotoViewController controller, Function onScaleChanged) {
+    XFile? image,
+    PhotoViewController controller,
+    Function onScaleChanged,
+  ) {
     if (image == null) return Container();
+
     return PhotoView(
       controller: controller,
       imageProvider: FileImage(File(image.path)),
@@ -585,6 +552,23 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
     );
   }
 
+  Widget _buildPhotoViewForEye(
+    XFile? image,
+    PhotoViewController controller,
+    Function onScaleChanged,
+    bool isSelected,
+  ) {
+    if (image == null) return Container();
+
+    return Positioned(
+      left: isSelected ? 0 : -10000,
+      top: 0,
+      width: width - menuSize,
+      height: height,
+      child: _buildPhotoView(image, controller, onScaleChanged),
+    );
+  }
+
   Widget _buildDraggableEyeFrame({
     required Offset position,
     required Function(Offset) onDragEnd,
@@ -600,19 +584,24 @@ class _PictureAdjustmentScreenState extends State<PictureAdjustmentScreen> {
             width: eyewidth,
             height: eyeheight,
             decoration: BoxDecoration(
-              border: Border.all(color: borderColor, width: 3.0),
-              borderRadius: const BorderRadius.horizontal(
-                left: Radius.circular(30),
-                right: Radius.circular(30),
-              ),
-            ),
+                color: Colors.transparent,
+                border:
+                    Border.all(color: borderColor.withOpacity(0.8), width: 3.0),
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(30),
+                  right: Radius.circular(30),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 3
+                  ),
+                ]),
           ),
         ),
         childWhenDragging:
             Container(), // Hide the original frame while dragging
         onDragEnd: (details) {
-          // onDragEnd(details.offset);
-
           onDragEnd(Offset(
             // Ensure the frame stays within bounds
             details.offset.dx.clamp(0, (width - menuSize) - eyewidth),

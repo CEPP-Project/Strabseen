@@ -57,7 +57,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
           stream,
           length,
           filename: p.basename(file.path),
-          contentType: MediaType.parse(getContentType(file.path)),
+          contentType: MediaType.parse(_getContentType(file.path)),
         );
 
         // print(p.basename(file.path));
@@ -122,7 +122,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
     // }
   }
 
-  String getContentType(String filePath) {
+  String _getContentType(String filePath) {
     switch (p.extension(filePath).toLowerCase()) {
       case '.png':
         return 'image/png';

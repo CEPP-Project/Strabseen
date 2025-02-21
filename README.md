@@ -1,6 +1,7 @@
-# strabismus2
+# StrabSeen
 
-Another version of Mobile App for Strabismus
+Mobile app for strabismus detection
+(Upgrade version of MAPP-Strabismus2)
 
 ## Getting Started
 

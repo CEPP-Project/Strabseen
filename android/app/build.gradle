@@ -55,7 +55,7 @@ android {
         release {
             keyAlias 'my-key-alias'
             keyPassword '038206152'
-            storeFile file('D:\\KMITL\\Year3 2nd\\CCEP\\Project\\strabismus2\\android\\app\\my-release-key.jks')
+            storeFile file('D:\\dev\\strabseen\\android\\app\\my-release-key.jks')
             storePassword '038206152'
         }
     }

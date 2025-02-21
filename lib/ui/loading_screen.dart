@@ -42,8 +42,8 @@ class _LoadingScreenState extends State<LoadingScreen> {
       });
       var apiUrl =
           Uri.parse('https://iot.telemed.kmitl.ac.th/uploads/detect'); // real api
-      // var apiUrl = Uri.parse('http://10.0.2.2:8000/upload-images'); // testing with emulate
-      // var apiUrl = Uri.parse('http://192.168.x.x:8000/upload-images'); // testing with device on local network
+      // var apiUrl = Uri.parse('http://10.0.2.2:8000/uploads/detect'); // testing with emulate
+      // var apiUrl = Uri.parse('http://192.168.x.x:8000/uploads/detect'); // testing with device on local network
 
       var request = http.MultipartRequest('POST', apiUrl);
 
